@@ -1,0 +1,15 @@
+{
+  "name": "asalet-bot-starter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev",
+    "start": "vercel dev",
+    "lint": "echo 'no lint step configured'"
+  },
+  "dependencies": {
+    "googleapis": "^133.0.0",
+    "node-fetch": "^3.3.2"
+  }
+}
