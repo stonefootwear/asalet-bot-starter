@@ -31,3 +31,4 @@ Starter backend for Vercel serverless functions.
 ## Cron (Daily report)
 If Vercel Cron is unavailable on your plan, use a free cron service (e.g., cron-job.org) to call:
 `https://<your-vercel-domain>/api/report` every day at **23:00 Africa/Cairo**.
+Redeploy test
