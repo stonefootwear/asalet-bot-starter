@@ -1,13 +1,16 @@
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ ok: false, error: 'Method not allowed' });
-  }
   try {
-    const body = req.body || {};
-    const textRaw = (body.text ?? '').toString().trim();
-    const lower = textRaw.toLowerCase();
+    const method = req.method || 'GET';
+    let textRaw = '';
 
-    // --- رسائل ثابتة حسب اتفاقنا ---
+    if (method === 'POST') {
+      textRaw = ((req.body && req.body.text) || '').toString().trim();
+    } else if (method === 'GET') {
+      textRaw = ((req.query && req.query.text) || '').toString().trim();
+    } else {
+      return res.status(405).json({ ok: false, error: 'Method not allowed' });
+    }
+
     const priceAR =
 `• دخون: 23 درهم/الحبة — وعند 5 حبات أو أكثر: 19 درهم/الحبة
 • عطور: 80 درهم/القطعة
@@ -24,14 +27,17 @@ export default async function handler(req, res) {
 
     let reply = welcomeAR;
 
-    // مطابقة الكلمات المفتاحية
     if (/(price|how much|بكم)/i.test(textRaw)) {
       reply = priceAR;
     } else if (/(location|وين مكانكم)/i.test(textRaw)) {
       reply = locationAR;
     }
 
-    return res.status(200).json({ ok: true, reply });
+    if (!textRaw && method === 'GET') {
+      return res.status(200).json({ ok: true, hint: 'أضِف ?text=بكم إلى الرابط', reply });
+    }
+
+    return res.status(200).json({ ok: true, reply, input: textRaw, method });
   } catch (e) {
     return res.status(200).json({ ok: false, reply: 'صار خلل بسيط، جرّب بعد لحظات 🙏' });
   }
