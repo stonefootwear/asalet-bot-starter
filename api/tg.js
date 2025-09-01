@@ -100,8 +100,7 @@ if (haveAdminRules && !isAdmin) {
         break;
       }
       default:
-        await sendToTelegram('✔️ تم. تقدر تكتب بالعامية: "خلّيه مختصر"، "سعر الفردي 23"، "الشحن 25"، "الحالة"…');
-    }
+  await sendToTelegram('✅ تم.');
 
     return res.status(200).json({ ok:true });
   } catch (e) {
