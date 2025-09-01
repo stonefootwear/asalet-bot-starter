@@ -15,11 +15,22 @@ export default async function handler(req, res) {
     const txtRaw = (msg.text || '').trim();
     const fromUser = (msg.from?.username || '');
 
-    if (!chatId || (GROUP_ID && chatId !== GROUP_ID)) return res.status(200).json({ ok:true, ignored:true });
-    if (fromUser.toLowerCase() !== ADMIN_USERNAME.toLowerCase()) {
-      await sendToTelegram('⚠️ غير مخوّل');
-      return res.status(200).json({ ok:true });
-    }
+   const ADMIN_USER_ID = (process.env.TELEGRAM_ADMIN_ID || '').trim();
+const adminUser = (process.env.TELEGRAM_ADMIN_USERNAME || 'Mohamedelmehnkar').toLowerCase();
+const fromId = String(msg.from?.id || '');
+const fromUsername = (msg.from?.username || '').toLowerCase();
+
+const haveAdminRules = !!(ADMIN_USER_ID || adminUser);
+const isAdmin =
+  (ADMIN_USER_ID && fromId === ADMIN_USER_ID) ||
+  (adminUser && fromUsername === adminUser);
+
+// مؤقتًا: لو مفيش قواعد إدمن في env، اسمح لأي عضو في الجروب يبعث أوامر
+if (haveAdminRules && !isAdmin) {
+  await sendToTelegram(`⚠️ غير مخوّل: fromId=${fromId} username=${fromUsername || '(no username)'}`);
+  return res.status(200).json({ ok:true });
+}
+
 
     const txt = normalizeArabic(txtRaw);
 
