@@ -19,3 +19,4 @@ export default async function handler(req, res) {
     telegram: telegramResp
   });
 }
+await sendToTelegram(`DEBUG chat=${chatId} fromId=${msg.from?.id} username=${msg.from?.username || '(none)'} txt=${txtRaw}`);
