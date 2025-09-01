@@ -66,12 +66,14 @@ if (haveAdminRules && !isAdmin) {
         break;
       }
       case 'set_template': {
-        const { intent, variant, text } = cmd.params || {};
-        if (!intent || !variant || !text) { await sendToTelegram('❓ حدّد intent/variant والنص'); break; }
-        await setConfig(`tmpl_${intent}_${variant}`, text);
-        await sendToTelegram(`✅ تم تحديث قالب ${intent}/${variant}`);
-        break;
-      }
+  let { intent, variant, text } = cmd.params || {};
+  if (!intent || !text) { await sendToTelegram('❓ حدّد intent والنص'); break; }
+  variant = variant || 'short'; // افتراض
+  await setConfig(`tmpl_${intent}_${variant}`, text);
+  await sendToTelegram(`✅ تم تحديث قالب ${intent}/${variant}`);
+  break;
+}
+
       case 'toggle_ig_auto': {
         const on = !!cmd.params?.on;
         await setConfig('ig_auto', on ? 'on' : 'off');
