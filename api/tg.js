@@ -5,10 +5,9 @@ import { sendToTelegram }     from '../lib/telegram.js';
 import { normalizeArabic }    from '../lib/arabic.js';
 import { parseAdminCommand }  from '../lib/nlp.js';
 
-// إعدادات الوصول من الـENV
-const ADMIN_USERNAME = (process.env.TELEGRAM_ADMIN_USERNAME || 'Mohamedelmehnkar').toLowerCase(); // بدون @
-const ADMIN_USER_ID  = (process.env.TELEGRAM_ADMIN_ID || '').trim();   // اختياري
-const GROUP_ID       = (process.env.TELEGRAM_GROUP_ID || '').trim();   // -100...
+const ADMIN_USERNAME = (process.env.TELEGRAM_ADMIN_USERNAME || 'Mohamedelmehnkar').toLowerCase();
+const ADMIN_USER_ID  = (process.env.TELEGRAM_ADMIN_ID || '').trim();
+const GROUP_ID       = (process.env.TELEGRAM_GROUP_ID || '').trim();
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -16,7 +15,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1) قراءة التحديث من تيليجرام
     const update   = req.body || {};
     const msg      = update.message || update.edited_message || {};
     const chatId   = String(msg.chat?.id || '');
@@ -24,27 +22,26 @@ export default async function handler(req, res) {
     const fromId   = String(msg.from?.id || '');
     const fromUser = (msg.from?.username || '').toLowerCase();
 
-    // 2) فلتر الجروب (لو متضبط GROUP_ID)
+    // امنع التعامل خارج الجروب لو GROUP_ID متضبط
     if (GROUP_ID && chatId !== GROUP_ID) {
       return res.status(200).json({ ok: true, ignored: true });
     }
 
-    // 3) التحقق من الإدمن (لو فيه قواعد إدمن)
+    // تحقّق إدمن (لو مفعل)
     const haveAdminRules = !!(ADMIN_USER_ID || ADMIN_USERNAME);
     const isAdmin =
       (ADMIN_USER_ID && fromId === ADMIN_USER_ID) ||
       (ADMIN_USERNAME && fromUser === ADMIN_USERNAME);
 
     if (haveAdminRules && !isAdmin) {
-      // مش إدمن → ما ننفذش أوامر
-      await sendToTelegram('⚠️ غير مخوّل.');
+      // صامت أو فعّل السطر التالي لو عايز تنبيه
+      // await sendToTelegram('⚠️ غير مخوّل.');
       return res.status(200).json({ ok: true, ignored: true });
     }
 
-    // 4) تطبيع النص + فولباك بسيط للحالة
     const text = normalizeArabic(txtRaw);
 
-    // فولباك سريع للحالة بدون LLM
+    // مسار سريع للحالة
     if (/^(?:\/)?status\b/i.test(text) || /الحال[هة]/.test(text)) {
       const cfg = await getConfig();
       const summary = Object.entries(cfg).map(([k,v]) => `${k}=${v}`).join('\n') || 'لا إعدادات';
@@ -52,16 +49,15 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    // 5) نطلب تفسير الأمر من الـLLM
-    let cmd = await parseAdminCommand(text);
+    // استخدام الـLLM
+    const cmd = await parseAdminCommand(text);
 
-    // لو مش أمر مفهوم → لا تعديلات + رسالة واضحة
+    // لو مفيش أمر مفهوم: لا تعديلات + رسالة واضحة
     if (!cmd || cmd.action === 'none') {
       await sendToTelegram('ما نفذت أي تغيير.');
       return res.status(200).json({ ok: true, ignored: true });
     }
 
-    // 6) تنفيذ الأوامر المسموحة
     switch (cmd.action) {
       case 'set_reply_mode': {
         const mode = cmd.params?.mode;
@@ -114,7 +110,7 @@ export default async function handler(req, res) {
         break;
       }
 
-      // أمثلة تجريبية اختيارية:
+      // أمثلة اختيارية:
       case 'send_to_user': {
         const u = cmd.targets?.username || '';
         const m = cmd.message || '';
@@ -130,12 +126,11 @@ export default async function handler(req, res) {
       }
 
       default: {
-        // مفيش "تم" هنا — أمان
+        // مهم: لا ترسل "تم" هنا
         break;
       }
     }
 
-    // 7) نرجّع 200 لتليجرام
     return res.status(200).json({ ok: true });
 
   } catch (e) {
