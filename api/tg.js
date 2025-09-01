@@ -1,12 +1,14 @@
+// /api/tg.js
+
 import { setConfig, getConfig } from '../lib/config.js';
 import { sendToTelegram }     from '../lib/telegram.js';
 import { normalizeArabic }    from '../lib/arabic.js';
 import { parseAdminCommand }  from '../lib/nlp.js';
 
-// إعدادات الوصول
+// إعدادات الوصول من الـENV
 const ADMIN_USERNAME = (process.env.TELEGRAM_ADMIN_USERNAME || 'Mohamedelmehnkar').toLowerCase(); // بدون @
-const ADMIN_USER_ID  = (process.env.TELEGRAM_ADMIN_ID || '').trim(); // اختياري
-const GROUP_ID       = (process.env.TELEGRAM_GROUP_ID || '').trim(); // -100...
+const ADMIN_USER_ID  = (process.env.TELEGRAM_ADMIN_ID || '').trim();   // اختياري
+const GROUP_ID       = (process.env.TELEGRAM_GROUP_ID || '').trim();   // -100...
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -14,46 +16,52 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1) قراءة الرسالة
-    const update  = req.body || {};
-    const msg     = update.message || update.edited_message || {};
-    const chatId  = String(msg.chat?.id || '');
-    const txtRaw  = (msg.text || '').trim();
-    const fromId  = String(msg.from?.id || '');
-    const fromUsr = (msg.from?.username || '').toLowerCase();
+    // 1) قراءة التحديث من تيليجرام
+    const update   = req.body || {};
+    const msg      = update.message || update.edited_message || {};
+    const chatId   = String(msg.chat?.id || '');
+    const txtRaw   = (msg.text || '').trim();
+    const fromId   = String(msg.from?.id || '');
+    const fromUser = (msg.from?.username || '').toLowerCase();
 
-    // 2) فلتر الجروب (لو GROUP_ID متضبط)
+    // 2) فلتر الجروب (لو متضبط GROUP_ID)
     if (GROUP_ID && chatId !== GROUP_ID) {
       return res.status(200).json({ ok: true, ignored: true });
     }
 
-    // 3) التحقق من الإدمن (لو متضبط TELEGRAM_ADMIN_ID/USERNAME)
+    // 3) التحقق من الإدمن (لو فيه قواعد إدمن)
     const haveAdminRules = !!(ADMIN_USER_ID || ADMIN_USERNAME);
     const isAdmin =
       (ADMIN_USER_ID && fromId === ADMIN_USER_ID) ||
-      (ADMIN_USERNAME && fromUsr === ADMIN_USERNAME);
+      (ADMIN_USERNAME && fromUser === ADMIN_USERNAME);
 
     if (haveAdminRules && !isAdmin) {
-      await sendToTelegram('⚠️ غير مخوّل');
+      // مش إدمن → ما ننفذش أوامر
+      await sendToTelegram('⚠️ غير مخوّل.');
+      return res.status(200).json({ ok: true, ignored: true });
+    }
+
+    // 4) تطبيع النص + فولباك بسيط للحالة
+    const text = normalizeArabic(txtRaw);
+
+    // فولباك سريع للحالة بدون LLM
+    if (/^(?:\/)?status\b/i.test(text) || /الحال[هة]/.test(text)) {
+      const cfg = await getConfig();
+      const summary = Object.entries(cfg).map(([k,v]) => `${k}=${v}`).join('\n') || 'لا إعدادات';
+      await sendToTelegram(`ℹ️ الحالة:\n${summary}`);
       return res.status(200).json({ ok: true });
     }
 
-    // 4) تطبيع النص وتمريره لـ LLM
-    const text = normalizeArabic(txtRaw);
+    // 5) نطلب تفسير الأمر من الـLLM
     let cmd = await parseAdminCommand(text);
-if (!cmd || cmd.action === 'none') {
-  await sendToTelegram('ما نفذت أي تغيير.');
-  return res.status(200).json({ ok:true, ignored:true });
-}
 
-    // 5) فولباك بسيط لو الـLLM رجع none
+    // لو مش أمر مفهوم → لا تعديلات + رسالة واضحة
     if (!cmd || cmd.action === 'none') {
-      if (/^(?:\/)?status\b/i.test(text) || /الحال[هة]/.test(text)) {
-        cmd = { action: 'status' };
-      }
+      await sendToTelegram('ما نفذت أي تغيير.');
+      return res.status(200).json({ ok: true, ignored: true });
     }
 
-    // 6) تنفيذ الأوامر
+    // 6) تنفيذ الأوامر المسموحة
     switch (cmd.action) {
       case 'set_reply_mode': {
         const mode = cmd.params?.mode;
@@ -86,7 +94,7 @@ if (!cmd || cmd.action === 'none') {
       case 'set_template': {
         let { intent, variant, text: t } = cmd.params || {};
         if (!intent || !t) { await sendToTelegram('❓ حدّد intent والنص'); break; }
-        const vr = variant || 'short'; // افتراضي
+        const vr = variant || 'short';
         await setConfig(`tmpl_${intent}_${vr}`, t);
         await sendToTelegram(`✅ تم تحديث قالب ${intent}/${vr}`);
         break;
@@ -106,7 +114,7 @@ if (!cmd || cmd.action === 'none') {
         break;
       }
 
-      // أمثلة تجريبية
+      // أمثلة تجريبية اختيارية:
       case 'send_to_user': {
         const u = cmd.targets?.username || '';
         const m = cmd.message || '';
@@ -122,13 +130,12 @@ if (!cmd || cmd.action === 'none') {
       }
 
       default: {
-        // رد قصير من غير إرشادات
-        await sendToTelegram('✅ تم.');
+        // مفيش "تم" هنا — أمان
         break;
       }
     }
 
-    // 7) رجّع 200 دايمًا عشان تيليجرام يكون راضي
+    // 7) نرجّع 200 لتليجرام
     return res.status(200).json({ ok: true });
 
   } catch (e) {
