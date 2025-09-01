@@ -1,22 +1,23 @@
-import fetch from 'node-fetch';
-
+// api/debug-tg.js
 export default async function handler(req, res) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_GROUP_ID;
-  const url = `https://api.telegram.org/bot${token}/sendMessage`;
-  const payload = { chat_id: chatId, text: '🔧 Debug ping from Vercel', disable_web_page_preview: true };
-
-  let telegramResp = null;
   try {
-    const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
-    telegramResp = await r.json();
-  } catch (e) {
-    telegramResp = { ok: false, error: String(e) };
-  }
+    const token  = process.env.TELEGRAM_BOT_TOKEN;
+    const chatId = process.env.TELEGRAM_GROUP_ID;
+    const text   = (req.query.text || 'Debug ping from Vercel').toString();
 
-  res.status(200).json({
-    env: { hasToken: !!token, hasChat: !!chatId },
-    telegram: telegramResp
-  });
+    if (!token || !chatId) {
+      return res.status(200).json({ ok: false, error: 'missing env' });
+    }
+
+    const api = `https://api.telegram.org/bot${token}/sendMessage`;
+    const r = await fetch(api, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true })
+    });
+    const j = await r.json();
+    return res.status(200).json({ ok: true, telegram: j });
+  } catch (e) {
+    return res.status(200).json({ ok: false, error: e?.message || String(e) });
+  }
 }
-await sendToTelegram(`DEBUG chat=${chatId} fromId=${msg.from?.id} username=${msg.from?.username || '(none)'} txt=${txtRaw}`);
