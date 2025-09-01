@@ -41,6 +41,10 @@ export default async function handler(req, res) {
     // 4) تطبيع النص وتمريره لـ LLM
     const text = normalizeArabic(txtRaw);
     let cmd = await parseAdminCommand(text);
+if (!cmd || cmd.action === 'none') {
+  await sendToTelegram('ما نفذت أي تغيير.');
+  return res.status(200).json({ ok:true, ignored:true });
+}
 
     // 5) فولباك بسيط لو الـLLM رجع none
     if (!cmd || cmd.action === 'none') {
